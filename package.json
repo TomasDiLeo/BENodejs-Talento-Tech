@@ -1,0 +1,13 @@
+{
+  "name": "preentrega",
+  "version": "1.0.0",
+  "description": "Esquema de trabajo para el curso de Talento Tech en Back End con Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type":"module"
+}
