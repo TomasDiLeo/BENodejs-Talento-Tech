@@ -1,74 +1,109 @@
 
-const args = process.argv.slice(2);
+const [, , rawMethod, rawResource, ...params] = process.argv;
 
-async function getAllProducts() {
-    const response = await fetch('https://fakestoreapi.com/products');
-    const products = await response.json();
-    for (let product of products) {        
-        const { id, title, price, category } = product;
-        console.log(
-            `${title} || ID: ${id}\n`,
-            `-------------------------\n`,
-            `Price: $${price}\n`,
-            `Category: ${category}\n`
-        );
-    }
+if (!rawMethod || !rawResource) {
+    console.error('Usage: npm start <METHOD> <RESOURCE> [PARAMS]');
+    console.error('Examples:');
+    console.error('  npm start GET products');
+    console.error('  npm start GET products/<Id>');
+    console.error('  npm start POST products <title> <price> <category>');
+    console.error('  npm start DELETE products/<Id>');
+    process.exit(1);
 }
 
-async function getProductById(productId) {
-    const response = await fetch(`https://fakestoreapi.com/products/${productId}`);
-    if (response.ok) {
-        const product = await response.json();
-        console.log(product);
-    } else {
-        console.log(`Producto con id ${productId} no encontrado.`);
+const method = rawMethod.toUpperCase();
+const resource = rawResource.toLowerCase();
+
+const URL = 'https://fakestoreapi.com/products';
+
+async function request(url = URL, options = {}) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
     }
+    return await response.json();
 }
 
-async function createProduct(title, price, category) {
-    const response = await fetch('https://fakestoreapi.com/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, price: Number(price), category })
+function showOutput(output) {
+    output.forEach(product => {
+        console.log(`Product: ${product.title}  ||  ID:${product.id}`);
+        console.log(`Category: ${product.category}`);
+        console.log(`Price: $${product.price}`);
+        console.log('.\n.');
     });
-    const result = await response.json();
-    console.log(result);
 }
 
-async function deleteProduct(productId) {
-    const response = await fetch(`https://fakestoreapi.com/products/${productId}`, {
-        method: 'DELETE'
-    });
-    const result = await response.json();
-    console.log(result);
-}
+async function main() {
 
-function parseCommand(args) {
-    if (args.length === 2 && args[0] === 'GET' && args[1] === 'products') {
-        getAllProducts();
-    } else if (
-        args.length === 3 &&
-        args[0] === 'GET' &&
-        args[1] === 'products' &&
-        !isNaN(Number(args[2]))
-    ) {
-        getProductById(args[2]);
-    } else if (
-        args.length === 5 &&
-        args[0] === 'POST' &&
-        args[1] === 'products'
-    ) {
-        createProduct(args[2], args[3], args[4]);
-    } else if (
-        args.length === 3 &&
-        args[0] === 'DELETE' &&
-        args[1] === 'products' &&
-        !isNaN(Number(args[2]))
-    ) {
-        deleteProduct(args[2]);
-    } else {
-        console.log('Comando no reconocido. Usa: GET products, GET products/<productId>, POST products <title> <price> <category>, DELETE products/<productId>');
+    var output = [];
+    switch (method) {
+        case 'GET':
+            if (params.length != 0){
+                throw new Error('GET products does not take any parameters');
+            }
+
+            if (resource === 'products') {
+                output = [...await request()];
+                console.log('Success: Retrieved all products\n');
+            } else if (resource.startsWith('products/')) {
+                const productId = resource.split('/')[1];
+                output.push(await request(`${URL}/${productId}`));
+                console.log(`Success: Retrieved product by ID: ${productId}\n`);
+            } else {
+                throw new Error(`Unsupported resource for GET: ${resource}`);
+            }
+        break;
+        case 'POST':
+            if (params.length != 3){
+                throw new Error('POST products requires 3 parameters: <title> <price> <category>');
+            }
+
+            if (resource !== 'products') {
+                throw new Error(`Unsupported resource for POST: ${resource}`);
+            }
+
+            const [title, rawPrice, category] = params;
+            const price = parseFloat(rawPrice);
+            if (isNaN(price) || price <= 0) {
+                throw new Error('Price must be a positive number');
+            }
+
+            const newProduct = {
+                title,
+                price: parseFloat(price),
+                category
+            };
+
+            output.push(await request(URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newProduct)
+            }));
+            console.log('Success in creating new product :\n');
+        break;
+        case 'DELETE':
+            if (params.length != 0) {
+              throw new Error("DELETE products does not take any parameters");
+            }
+
+            if (resource.startsWith("products/")) {
+              const productId = resource.split("/")[1];
+              output.push(await request(`${URL}/${productId}`, {
+                method: "DELETE"
+              }));
+              console.log(`Success: DELETED product by ID: ${productId}\n`);
+            } else {
+              throw new Error(`ID was not provided for DELETE, use format: products/<productId>`);
+            }
+        break;
+        default:
+            throw new Error(`Unsupported method: ${method}`);
     }
+    showOutput(output);
 }
 
-parseCommand(args);
+main().catch(error => {
+    console.error(error.message);
+});
